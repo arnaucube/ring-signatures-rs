@@ -98,6 +98,43 @@ impl KeyPair {
     }
 }
 
+pub fn verify(
+    ring: Vec<PublicKey>,
+    m: Vec<u8>,
+    key_image: EdwardsProjective,
+    sig: Signature,
+) -> bool {
+    let ring_size = ring.len();
+
+    let c1 = sig.0;
+    let r = sig.1;
+    if ring_size != r.len() {
+        println!("ERROR"); // TODO
+        return false;
+    }
+    // TODO check that key_image \in G (EC), by l * key_image == 0
+
+    let mut c: Vec<Fr> = vec![Fr::zero(); ring_size];
+    c[0] = c1;
+    for j in 0..ring_size {
+        let i = j % ring_size;
+        let i1 = (j + 1) % ring_size;
+        c[i1] = hash(
+            &ring,
+            &m,
+            G.mul(r[i].into_repr()) + ring[i].mul(c[i].into_repr()),
+            hash_to_point(ring[i]).mul(r[i].into_repr()) + key_image.mul(c[i].into_repr()),
+        );
+    }
+
+    println!("c {:?}\n{:?}", c1, c[0]);
+
+    if c1 == c[0] {
+        return true;
+    }
+    false
+}
+
 fn hash_to_point(a: EdwardsProjective) -> EdwardsProjective {
     // TODO use a proper hash_to_point method
     let mut v: Vec<u8> = Vec::new();
@@ -130,4 +167,37 @@ fn hash(ring: &Vec<PublicKey>, m: &Vec<u8>, a: EdwardsProjective, b: EdwardsProj
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_bLSAG() {
+        let n = 5; // ring size
+        let pi = 3; // position of prover key in the ring
+
+        let k_pi = new_key();
+        println!("{:?}", k_pi);
+
+        // generate other n public keys
+        let mut ring: Vec<PublicKey> = vec![G.clone(); n];
+        for i in 0..n {
+            let k = new_key();
+            ring[i] = k.pk;
+        }
+        // set K_pi
+        ring[pi] = k_pi.pk;
+
+        let m: Vec<u8> = vec![1, 2, 3, 4];
+        let sig = k_pi.sign(ring.clone(), m.clone());
+        println!("sig {:?}", sig);
+
+        let key_image = k_pi.key_image();
+
+        let v = verify(ring.clone(), m.clone(), key_image, sig.clone());
+        println!("v {:?}", v);
+        assert!(v);
+
+        let m: Vec<u8> = vec![1, 2, 3, 3];
+        let v = verify(ring, m, key_image, sig);
+        assert!(!v);
+    }
 }
