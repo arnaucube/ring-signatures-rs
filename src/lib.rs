@@ -1,8 +1,8 @@
 extern crate ark_ed_on_bn254;
 use ark_ec::{AffineCurve, ProjectiveCurve, TEModelParameters};
 use ark_ed_on_bn254::{EdwardsAffine, EdwardsParameters, EdwardsProjective, FqParameters, Fr};
-use ark_ff::{bytes::FromBytes, fields::PrimeField, BigInteger, Fp256};
-use ark_std::{rand, UniformRand, Zero};
+use ark_ff::{fields::PrimeField, BigInteger, Fp256};
+use ark_std::{UniformRand, Zero};
 use sha2::{Digest, Sha256};
 
 const GX: Fp256<FqParameters> = <EdwardsParameters as TEModelParameters>::AFFINE_GENERATOR_COEFFS.0;
@@ -34,6 +34,7 @@ pub fn new_key() -> KeyPair {
     KeyPair { sk, pk }
 }
 
+#[allow(clippy::many_single_char_names)]
 impl KeyPair {
     pub fn key_image(&self) -> EdwardsProjective {
         hash_to_point(self.pk).mul(self.sk.into_repr())
@@ -44,8 +45,9 @@ impl KeyPair {
         // determine pi (the position of signer's public key in R
         let mut pi = 0;
         let mut found = false;
-        for i in 0..ring_size {
-            if self.pk == ring[i] {
+        // for i in 0..ring_size {
+        for (i, ring_key) in ring.iter().enumerate() {
+            if &self.pk == ring_key {
                 pi = i;
                 found = true;
                 break;
@@ -61,6 +63,7 @@ impl KeyPair {
         let mut r: Vec<Fr> = vec![Fr::zero(); ring_size];
 
         // for i \in {1, 2, ..., n} \ {i=pi}
+        #[allow(clippy::needless_range_loop)]
         for i in 0..ring_size {
             if i == pi {
                 continue;
@@ -148,14 +151,14 @@ fn hash_to_point(a: EdwardsProjective) -> EdwardsProjective {
     G.mul(v.into_repr())
 }
 
-fn hash(ring: &Vec<PublicKey>, m: &Vec<u8>, a: EdwardsProjective, b: EdwardsProjective) -> Fr {
+fn hash(ring: &[PublicKey], m: &[u8], a: EdwardsProjective, b: EdwardsProjective) -> Fr {
     let mut v: Vec<u8> = Vec::new();
 
-    for i in 0..ring.len() {
-        v.append(&mut ring[i].into_affine().x.into_repr().to_bytes_le());
-        v.append(&mut ring[i].into_affine().y.into_repr().to_bytes_le());
+    for ring_key in ring.iter() {
+        v.append(&mut ring_key.into_affine().x.into_repr().to_bytes_le());
+        v.append(&mut ring_key.into_affine().y.into_repr().to_bytes_le());
     }
-    v.append(&mut m.clone());
+    v.append(&mut m.to_vec());
     v.append(&mut a.into_affine().x.into_repr().to_bytes_le());
     v.append(&mut a.into_affine().y.into_repr().to_bytes_le());
     v.append(&mut b.into_affine().x.into_repr().to_bytes_le());
