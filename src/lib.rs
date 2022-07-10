@@ -40,7 +40,7 @@ impl KeyPair {
         hash_to_point(self.pk).mul(self.sk.into_repr())
     }
 
-    pub fn sign(&self, ring: Vec<PublicKey>, m: Vec<u8>) -> Signature {
+    pub fn sign(&self, ring: Vec<PublicKey>, m: Vec<u8>) -> Result<Signature, String> {
         let ring_size = ring.len();
         // determine pi (the position of signer's public key in R
         let mut pi = 0;
@@ -54,8 +54,7 @@ impl KeyPair {
             }
         }
         if !found {
-            // error
-            println!("key not found in the ring");
+            return Err("key not found in the ring".to_string());
         }
 
         let mut rng = ark_std::rand::thread_rng();
@@ -97,7 +96,7 @@ impl KeyPair {
 
         // compute r_pi
         r[pi] = a - c[pi] * self.sk;
-        (c[0], r)
+        Ok((c[0], r))
     }
 }
 
@@ -112,7 +111,6 @@ pub fn verify(
     let c1 = sig.0;
     let r = sig.1;
     if ring_size != r.len() {
-        println!("ERROR"); // TODO
         return false;
     }
     // TODO check that key_image \in G (EC), by l * key_image == 0
@@ -190,7 +188,7 @@ mod tests {
         ring[pi] = k_pi.pk;
 
         let m: Vec<u8> = vec![1, 2, 3, 4];
-        let sig = k_pi.sign(ring.clone(), m.clone());
+        let sig = k_pi.sign(ring.clone(), m.clone()).unwrap();
         println!("sig {:?}", sig);
 
         let key_image = k_pi.key_image();
